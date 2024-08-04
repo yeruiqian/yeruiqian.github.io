@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>[工具] GitHub+Gridea+GitTalk 搭建个人免费博客 | RuiqianYe</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://yeruiqian.github.io/favicon.ico?v=1722758233249">
+<link rel="stylesheet" href="https://yeruiqian.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+
+    <meta name="description" content="
+起因
+GitHub
+
+创建个人仓库存主页
+创建用于Gridea连接的Token
+
+
+Gridea
+
+配置
+
+
+GitTalk
+大功告成
+
+
+起因
+想要搭建自己的博客网站，又不想花钱买域名，也不会前端技术，只能求助于简单(傻逼式)且免费的博..." />
+    <meta name="keywords" content="工具使用" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://yeruiqian.github.io">
+        <img src="https://yeruiqian.github.io/images/avatar.png?v=1722758233249" class="site-logo">
+        <h1 class="site-title">RuiqianYe</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="site-nav">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+          <a class="social-link" href="https://github.com/yeruiqian" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      温故而知新
+    </div>
+    <div class="site-footer">
+      Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | <a class="rss" href="https://yeruiqian.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">[工具] GitHub+Gridea+GitTalk 搭建个人免费博客</h2>
+            <div class="post-date">2024-07-27</div>
+            
+            <div class="post-content" v-pre>
+              <p><ul class="markdownIt-TOC">
+<li><a href="#%E8%B5%B7%E5%9B%A0">起因</a></li>
+<li><a href="#github">GitHub</a>
+<ul>
+<li><a href="#%E5%88%9B%E5%BB%BA%E4%B8%AA%E4%BA%BA%E4%BB%93%E5%BA%93%E5%AD%98%E4%B8%BB%E9%A1%B5">创建个人仓库存主页</a></li>
+<li><a href="#%E5%88%9B%E5%BB%BA%E7%94%A8%E4%BA%8Egridea%E8%BF%9E%E6%8E%A5%E7%9A%84token">创建用于Gridea连接的Token</a></li>
+</ul>
+</li>
+<li><a href="#gridea">Gridea</a>
+<ul>
+<li><a href="#%E9%85%8D%E7%BD%AE">配置</a></li>
+</ul>
+</li>
+<li><a href="#gittalk">GitTalk</a></li>
+<li><a href="#%E5%A4%A7%E5%8A%9F%E5%91%8A%E6%88%90">大功告成</a></li>
+</ul>
+</p>
+<h1 id="起因">起因</h1>
+<p>想要搭建自己的博客网站，又不想花钱买域名，也不会前端技术，只能求助于简单(傻逼式)且免费的博客搭建方式。偶然间看到这种方式，就搭建了一下。</p>
+<h1 id="github">GitHub</h1>
+<p>GitHub 可以用来创建 [用户名.github.io] 的个人主页，如果是学者，那这个主页应该是用来介绍自己的各种著作，自己的个人经历。如果是社畜，那可能就是用来创建自己的吐槽记录平台。</p>
+<h2 id="创建个人仓库存主页">创建个人仓库存主页</h2>
+<p>1、新建个人仓库，仓库名设置为[用户名.github.io] ，如下图所示，已经设置过了，所以显示重复。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722094791380.png" alt="new repository" loading="lazy"><br>
+2、在设置(Setting)界面将部署的页面设置为master，如下图所示。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722095110265.png" alt="setting" loading="lazy"></p>
+<h2 id="创建用于gridea连接的token">创建用于Gridea连接的Token</h2>
+<p>在个人Setting界面创建用于Gridea连接的Token，开始repo权限即可，记得保存好Token，关闭页面后就看不见了。 <img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722095258907.png" alt="Token" loading="lazy"></p>
+<h1 id="gridea">Gridea</h1>
+<p>这个分为开源和闭源的，开源的现在基本不更新了(毕竟人家要赚钱)，但是感觉开源的也还行，可以用用看。可以直接下载exe安装，进行傻瓜式配置。下载链接<code>https://open.gridea.dev/#started</code></p>
+<h2 id="配置">配置</h2>
+<p>软件界面远程设置一下，按照下图设置自己的仓库就行。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722095781868.png" alt="配置" loading="lazy"></p>
+<h1 id="gittalk">GitTalk</h1>
+<p>这个用来添加评论功能，跟上面Token类似，生成一个用来授予GitTalk的ID和secret，基础仓库记得加上 https://<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722096717285.png" alt="talk" loading="lazy"><br>
+然后将ID和secret上传到Gridea软件。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722096886839.png" alt="talk" loading="lazy"></p>
+<h1 id="大功告成">大功告成</h1>
+<p>demo <code>https://yeruiqian.github.io/</code></p>
+<p>搭建过程中看到有帮助的博客链接<br>
+@https://blog.csdn.net/qq_38830593/article/details/132686063<br>
+@https://blog.csdn.net/qq_38463737/article/details/120288329<br>
+@https://vlieo.com/post/config-gitalk-in-the-gridea/</p>
+
+            </div>
+            
+              <div class="tag-container">
+                
+                  <a href="https://yeruiqian.github.io/tag/zz5qqFdEe/" class="tag">
+                    工具使用
+                  </a>
+                
+              </div>
+            
+            
+
+            
+              
+                <div id="gitalk-container" data-aos="fade-in"></div>
+              
+
+              
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: 'Ov23liaRWNmhKYXwLF57',
+        clientSecret: 'b5f0905139787275a2ea74626cf44f004c753358',
+        repo: 'yeruiqian.github.io',
+        owner: 'yeruiqian',
+        admin: ['yeruiqian'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

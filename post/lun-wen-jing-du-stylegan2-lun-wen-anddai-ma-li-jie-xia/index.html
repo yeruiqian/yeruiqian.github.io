@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>[论文精读] StyleGAN2 论文&amp;代码理解 (下) | RuiqianYe</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://yeruiqian.github.io/favicon.ico?v=1722758233249">
+<link rel="stylesheet" href="https://yeruiqian.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+
+    <meta name="description" content="
+前言
+1、Generator网络结构
+
+1.1 初始化
+
+1.1.1 输入初始化
+mapping network初始化
+Synthesis network初始化
+
+
+1.2 forward
+1.3 备注：styleconv的理解
+
+
+2、..." />
+    <meta name="keywords" content="" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://yeruiqian.github.io">
+        <img src="https://yeruiqian.github.io/images/avatar.png?v=1722758233249" class="site-logo">
+        <h1 class="site-title">RuiqianYe</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="site-nav">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+          <a class="social-link" href="https://github.com/yeruiqian" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      温故而知新
+    </div>
+    <div class="site-footer">
+      Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | <a class="rss" href="https://yeruiqian.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">[论文精读] StyleGAN2 论文&amp;代码理解 (下)</h2>
+            <div class="post-date">2024-08-04</div>
+            
+            <div class="post-content" v-pre>
+              <p><ul class="markdownIt-TOC">
+<li><a href="#%E5%89%8D%E8%A8%80">前言</a></li>
+<li><a href="#1-generator%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84">1、Generator网络结构</a>
+<ul>
+<li><a href="#11-%E5%88%9D%E5%A7%8B%E5%8C%96">1.1 初始化</a>
+<ul>
+<li><a href="#111-%E8%BE%93%E5%85%A5%E5%88%9D%E5%A7%8B%E5%8C%96">1.1.1 输入初始化</a></li>
+<li><a href="#mapping-network%E5%88%9D%E5%A7%8B%E5%8C%96">mapping network初始化</a></li>
+<li><a href="#synthesis-network%E5%88%9D%E5%A7%8B%E5%8C%96">Synthesis network初始化</a></li>
+</ul>
+</li>
+<li><a href="#12-forward">1.2 forward</a></li>
+<li><a href="#13-%E5%A4%87%E6%B3%A8styleconv%E7%9A%84%E7%90%86%E8%A7%A3">1.3 备注：styleconv的理解</a></li>
+</ul>
+</li>
+<li><a href="#2-%E4%B8%BB%E7%BD%91%E7%BB%9C%E8%AE%AD%E7%BB%83">2、主网络训练</a>
+<ul>
+<li><a href="#21-%E6%9B%B4%E6%96%B0%E9%89%B4%E5%88%AB%E5%99%A8">2.1 更新鉴别器</a></li>
+<li><a href="#22-%E6%9B%B4%E6%96%B0%E7%94%9F%E6%88%90%E5%99%A8">2.2 更新生成器</a></li>
+</ul>
+</li>
+<li><a href="#3-%E5%9B%BE%E5%83%8F%E6%8A%95%E5%BD%B1%E5%88%B0%E9%9A%90%E7%A0%81%E7%A9%BA%E9%97%B4%E7%9A%84%E8%AE%AD%E7%BB%83">3、图像投影到隐码空间的训练</a>
+<ul>
+<li><a href="#31-%E5%88%9D%E5%A7%8B%E8%AE%BE%E7%BD%AE">3.1 初始设置</a></li>
+<li><a href="#32-%E8%BF%AD%E4%BB%A3%E8%BF%87%E7%A8%8B">3.2 迭代过程</a></li>
+</ul>
+</li>
+<li><a href="#%E5%B8%A6%E6%B3%A8%E9%87%8A%E4%BB%A3%E7%A0%81%E8%B7%AF%E5%BE%84">带注释代码路径</a></li>
+</ul>
+</p>
+<h1 id="前言">前言</h1>
+<p>这是StyleGAN2理解的下篇，主要讲述的是代码的理解。上篇讲到StyleGAN2的论文总体包括以下四个方面内容<br>
+<strong>(1)、水滴状伪影的修正(归一化的修改)</strong><br>
+<strong>(2)、图像质量的的提升，主要是PPL(perceptual path length)</strong><br>
+<strong>(3)、关于渐进提升分辨率的做法</strong><br>
+<strong>(4)、关于将图像投影到隐码空间 (latent space)</strong><br>
+代码主要需要分为3个大方面来理解<br>
+<strong>(1)、Generator网络结构</strong><br>
+<strong>(2)、主网络训练</strong><br>
+<strong>(3)、图像投影到隐码空间 (latent space)的训练</strong></p>
+<h1 id="1-generator网络结构">1、Generator网络结构</h1>
+<h2 id="11-初始化">1.1 初始化</h2>
+<h3 id="111-输入初始化">1.1.1 输入初始化</h3>
+<p>生成器参数输入主要包括6个东西，输入输出尺度(分辨率，下文以512作为输入输出表示)，style维度(通常是512个style)，mlp的个数(通常设置8)，通道的乘数(默认2)，模糊核的设置(默认[1,3,3,1])，以及mlp的学习率尺度。</p>
+<pre><code class="language-python">class Generator(nn.Module):
+    def __init__(
+        self,
+        size,
+        style_dim,
+        n_mlp,
+        channel_multiplier=2,
+        blur_kernel=[1, 3, 3, 1],
+        lr_mlp=0.01,
+    ):
+        super().__init__()
+</code></pre>
+<h3 id="mapping-network初始化">mapping network初始化</h3>
+<p>这部分也就是将原始输入随机数z，通过f(z) 变到w空间，是一个由若干个mlp(8个)构成的层。<br>
+第一个是一个用于像素归一化的层，通过input和自身平方根倒数相乘得到归一化数值<br>
+然后接下来的8层都是MLP层，通过线性/非线性映射，将输入的维度从[b,in_dim] 映射到 [b, in_dim]。以下是代码及便于理解的注释。</p>
+<pre><code class="language-python">        &quot;&quot;&quot;
+        归一化： x * rsqrt(x*x.mean+1e-8)
+        &quot;&quot;&quot;
+        layers = [PixelNorm()]
+
+        
+        &quot;&quot;&quot;
+        映射层： 512 -&gt; 512 ,
+        lr_mlp 是学习率乘法因子，
+
+        权重初始化torch.randn(out_dim, in_dim).div_(lr_mul)，除以小于1的数，放大了
+        偏置初始化0，
+
+        权重乘以这个 self.scale = (1 / math.sqrt(in_dim)) * lr_mul ， 实际上两者结合就是*(1 / math.sqrt(in_dim))
+        偏置乘以这个 self.lr_mul 
+        &quot;&quot;&quot;
+        for i in range(n_mlp):
+            layers.append(
+                EqualLinear(
+                    style_dim, style_dim, lr_mul=lr_mlp, activation=&quot;fused_lrelu&quot;
+                )
+            )
+
+        &quot;&quot;&quot;
+        style 将输入b in_dim -&gt; b in_dim 线性或非线性映射(存在激活函数)，dim一般=512
+        
+        &quot;&quot;&quot;
+        self.style = nn.Sequential(*layers)
+</code></pre>
+<h3 id="synthesis-network初始化">Synthesis network初始化</h3>
+<p>主要的生成网络的初始化，包括一些尺寸和通道数的初始化定义，初始输入，卷积，噪声引入的引入。<br>
+尺寸和通道数初始化定义如下，通过字典的方式强行绑定特征图尺寸和通道数。</p>
+<pre><code class="language-python">        self.channels = {
+            4: 512,
+            8: 512,
+            16: 512,
+            32: 512,
+            64: 256 * channel_multiplier,
+            128: 128 * channel_multiplier,
+            256: 64 * channel_multiplier,
+            512: 32 * channel_multiplier,
+            1024: 16 * channel_multiplier,
+        }
+</code></pre>
+<p>初始化输入，设计第一个styleconv和第一个to_rgb层，这些卷积都可以先当作普通卷积来理解。</p>
+<pre><code class="language-python">        &quot;&quot;&quot; 
+        初始化输入
+        self.channels[4]=512,初始化得到(1,512,4,4)
+        第一维度 repeat batch次 变成(b,512,4,4) 
+        &quot;&quot;&quot;
+        self.input = ConstantInput(self.channels[4])
+
+
+        &quot;&quot;&quot;
+        开始设置卷积了，在外部当作普通卷积理解，具体理解可见具体函数
+        输入输出通道都是512，没有上采样
+        &quot;&quot;&quot;
+        self.conv1 = StyledConv(
+            self.channels[4], self.channels[4], 3, style_dim, blur_kernel=blur_kernel
+        )
+
+        &quot;&quot;&quot;
+        先当作普通卷积，从512通道卷积到3通道(RGB)
+        b,512,4,4 -&gt; b,3,4,4
+        &quot;&quot;&quot;
+        self.to_rgb1 = ToRGB(self.channels[4], style_dim, upsample=False)
+</code></pre>
+<p>设计多个尺度下的卷积层和噪声层，具体理解可见代码注释</p>
+<pre><code class="language-python"># 2^n 次方，如果是512，logsize就是9
+        self.log_size = int(math.log(size, 2))
+
+        &quot;&quot;&quot;
+        层数根据logsize来设置如果是512，那么就是(9-2)*2+1 = 15 层，
+        初始尺寸4，是2^2 ，最终尺寸是2^9，除去第一个尺寸的一个卷积，其他每个尺寸都有两个卷积=(9-2)*2+1
+        &quot;&quot;&quot;
+        self.num_layers = (self.log_size - 2) * 2 + 1
+
+        self.convs = nn.ModuleList()
+        self.upsamples = nn.ModuleList()
+        self.to_rgbs = nn.ModuleList()
+        self.noises = nn.Module()
+
+        in_channel = self.channels[4]
+
+
+        &quot;&quot;&quot;
+        为啥+5？ 与每个尺寸的操作对应，第一个卷积只有一个，噪声也只有一个，都是在尺寸4上进行
+        从第二个卷积开始，每个卷积都有两个，噪声也有两个，+5可以保证下一个偶数噪声和下下个奇数噪声尺寸相同。
+        &quot;&quot;&quot;
+        for layer_idx in range(self.num_layers):
+            res = (layer_idx + 5) // 2
+            shape = [1, 1, 2 ** res, 2 ** res]
+            self.noises.register_buffer(f&quot;noise_{layer_idx}&quot;, torch.randn(*shape))
+
+        
+        &quot;&quot;&quot;
+        range从3开始到logsize+1，这个主要还是要和out_channel一一对应
+        第一个卷积输入时self.channels[2 ** 2] = self.channels[4] 
+        接下来每一层都是一个卷积(upsample=True) + 一个卷积(upsample=False)
+        且每次上采样都是伴随 2 ** i的改变，也就是通道数会和设定一样，越来越少
+        &quot;&quot;&quot;
+        for i in range(3, self.log_size + 1):
+            out_channel = self.channels[2 ** i]
+
+            self.convs.append(
+                StyledConv(
+                    in_channel,
+                    out_channel,
+                    3,
+                    style_dim,
+                    upsample=True,
+                    blur_kernel=blur_kernel,
+                )
+            )
+
+            self.convs.append(
+                StyledConv(
+                    out_channel, out_channel, 3, style_dim, blur_kernel=blur_kernel
+                )
+            )
+
+            self.to_rgbs.append(ToRGB(out_channel, style_dim))
+
+            in_channel = out_channel
+
+        &quot;&quot;&quot;
+        self.n_latent 表示lantent 隐码有几个，是2x9-2=16个
+        也就是总的2^9 ，每个维度有两个lantent但是2，没有，所以-2
+        &quot;&quot;&quot;
+        self.n_latent = self.log_size * 2 - 2
+</code></pre>
+<h2 id="12-forward">1.2 forward</h2>
+<p>具体的数据传输流程和生成过程。<br>
+首先可以先把一些训练过程中没用到的模块折叠，方便整体理解。<br>
+1、将输入数据通过mapping network 映射到w空间<br>
+2、将w空间负责n次变成W空间(方便嵌入不同维度)<br>
+3、最小维度(4x4)的卷积和torgb处理<br>
+4、从最小维度到512尺度的卷积(两个，一个有上采样一个没有)和torgb层<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722754274572.png#pic_center" alt="" loading="lazy"></p>
+<h2 id="13-备注styleconv的理解">1.3 备注：styleconv的理解</h2>
+<p>其实跟论文过程描述十分接近，可看下图。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722754600926.png#pic_center" alt="" loading="lazy"><br>
+那具体是怎么调制卷积权重的呢？<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722754928046.png#pic_center" alt="" loading="lazy"></p>
+<h1 id="2-主网络训练">2、主网络训练</h1>
+<h2 id="21-更新鉴别器">2.1 更新鉴别器</h2>
+<p>包括鉴别器更新、鉴别器正则化(16次迭代进行一次)。<br>
+鉴别器损失函数是softplus loss<br>
+正则化函数是 r1_loss （计算真实图像和生成图像的梯度，惩罚这个梯度，目的就是让鉴别器梯度小一点，稳定一点）<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722755231992.png#pic_center" alt="鉴别器更新" loading="lazy"></p>
+<h2 id="22-更新生成器">2.2 更新生成器</h2>
+<p>包括生成器更新、生成器正则化(4次迭代进行一次)<br>
+生成器损失函数也是softplus loss<br>
+正则化函数是路径正则化，也就是对图像增加噪声，观察其w梯度的变化。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722755531783.png#pic_center" alt="生成器更新" loading="lazy"></p>
+<p>路径正则化<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722755795920.png#pic_center" alt="路径正则化" loading="lazy"></p>
+<h1 id="3-图像投影到隐码空间的训练">3、图像投影到隐码空间的训练</h1>
+<h2 id="31-初始设置">3.1 初始设置</h2>
+<p>跟论文描述一样，先计算latent的均值和方差，然后初始化latent和noise的起点<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722756352517.png#pic_center" alt="" loading="lazy"></p>
+<h2 id="32-迭代过程">3.2 迭代过程</h2>
+<p>包括学习率的更新，前面750次迭代的噪声增加，图像损失函数和正则化损失<br>
+学习率和噪声的更新。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722756766026.png#pic_center" alt="" loading="lazy"><br>
+图像损失和正则化损失以及最后的noise归一化。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722756884845.png#pic_center" alt="" loading="lazy"></p>
+<h1 id="带注释代码路径">带注释代码路径</h1>
+<p><code>https://github.com/yeruiqian/stylegan2-pytorch</code></p>
+
+            </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://yeruiqian.github.io/post/lun-wen-jing-du-stylegan2-lun-wen-anddai-ma-li-jie/">
+                  <h3 class="post-title">
+                    [论文精读] StyleGAN2 论文&amp;代码理解 (上)
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+              
+                <div id="gitalk-container" data-aos="fade-in"></div>
+              
+
+              
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: 'Ov23liaRWNmhKYXwLF57',
+        clientSecret: 'b5f0905139787275a2ea74626cf44f004c753358',
+        repo: 'yeruiqian.github.io',
+        owner: 'yeruiqian',
+        admin: ['yeruiqian'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

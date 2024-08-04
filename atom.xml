@@ -1,0 +1,686 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://yeruiqian.github.io</id>
+    <title>RuiqianYe</title>
+    <updated>2024-08-04T07:57:15.438Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://yeruiqian.github.io"/>
+    <link rel="self" href="https://yeruiqian.github.io/atom.xml"/>
+    <subtitle>温故而知新</subtitle>
+    <logo>https://yeruiqian.github.io/images/avatar.png</logo>
+    <icon>https://yeruiqian.github.io/favicon.ico</icon>
+    <rights>All rights reserved 2024, RuiqianYe</rights>
+    <entry>
+        <title type="html"><![CDATA[[论文精读] StyleGAN2 论文&代码理解 (下)]]></title>
+        <id>https://yeruiqian.github.io/post/lun-wen-jing-du-stylegan2-lun-wen-anddai-ma-li-jie-xia/</id>
+        <link href="https://yeruiqian.github.io/post/lun-wen-jing-du-stylegan2-lun-wen-anddai-ma-li-jie-xia/">
+        </link>
+        <updated>2024-08-04T06:00:13.000Z</updated>
+        <content type="html"><![CDATA[<p><ul class="markdownIt-TOC">
+<li><a href="#%E5%89%8D%E8%A8%80">前言</a></li>
+<li><a href="#1-generator%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84">1、Generator网络结构</a>
+<ul>
+<li><a href="#11-%E5%88%9D%E5%A7%8B%E5%8C%96">1.1 初始化</a>
+<ul>
+<li><a href="#111-%E8%BE%93%E5%85%A5%E5%88%9D%E5%A7%8B%E5%8C%96">1.1.1 输入初始化</a></li>
+<li><a href="#mapping-network%E5%88%9D%E5%A7%8B%E5%8C%96">mapping network初始化</a></li>
+<li><a href="#synthesis-network%E5%88%9D%E5%A7%8B%E5%8C%96">Synthesis network初始化</a></li>
+</ul>
+</li>
+<li><a href="#12-forward">1.2 forward</a></li>
+<li><a href="#13-%E5%A4%87%E6%B3%A8styleconv%E7%9A%84%E7%90%86%E8%A7%A3">1.3 备注：styleconv的理解</a></li>
+</ul>
+</li>
+<li><a href="#2-%E4%B8%BB%E7%BD%91%E7%BB%9C%E8%AE%AD%E7%BB%83">2、主网络训练</a>
+<ul>
+<li><a href="#21-%E6%9B%B4%E6%96%B0%E9%89%B4%E5%88%AB%E5%99%A8">2.1 更新鉴别器</a></li>
+<li><a href="#22-%E6%9B%B4%E6%96%B0%E7%94%9F%E6%88%90%E5%99%A8">2.2 更新生成器</a></li>
+</ul>
+</li>
+<li><a href="#3-%E5%9B%BE%E5%83%8F%E6%8A%95%E5%BD%B1%E5%88%B0%E9%9A%90%E7%A0%81%E7%A9%BA%E9%97%B4%E7%9A%84%E8%AE%AD%E7%BB%83">3、图像投影到隐码空间的训练</a>
+<ul>
+<li><a href="#31-%E5%88%9D%E5%A7%8B%E8%AE%BE%E7%BD%AE">3.1 初始设置</a></li>
+<li><a href="#32-%E8%BF%AD%E4%BB%A3%E8%BF%87%E7%A8%8B">3.2 迭代过程</a></li>
+</ul>
+</li>
+<li><a href="#%E5%B8%A6%E6%B3%A8%E9%87%8A%E4%BB%A3%E7%A0%81%E8%B7%AF%E5%BE%84">带注释代码路径</a></li>
+</ul>
+</p>
+<h1 id="前言">前言</h1>
+<p>这是StyleGAN2理解的下篇，主要讲述的是代码的理解。上篇讲到StyleGAN2的论文总体包括以下四个方面内容<br>
+<strong>(1)、水滴状伪影的修正(归一化的修改)</strong><br>
+<strong>(2)、图像质量的的提升，主要是PPL(perceptual path length)</strong><br>
+<strong>(3)、关于渐进提升分辨率的做法</strong><br>
+<strong>(4)、关于将图像投影到隐码空间 (latent space)</strong><br>
+代码主要需要分为3个大方面来理解<br>
+<strong>(1)、Generator网络结构</strong><br>
+<strong>(2)、主网络训练</strong><br>
+<strong>(3)、图像投影到隐码空间 (latent space)的训练</strong></p>
+<h1 id="1-generator网络结构">1、Generator网络结构</h1>
+<h2 id="11-初始化">1.1 初始化</h2>
+<h3 id="111-输入初始化">1.1.1 输入初始化</h3>
+<p>生成器参数输入主要包括6个东西，输入输出尺度(分辨率，下文以512作为输入输出表示)，style维度(通常是512个style)，mlp的个数(通常设置8)，通道的乘数(默认2)，模糊核的设置(默认[1,3,3,1])，以及mlp的学习率尺度。</p>
+<pre><code class="language-python">class Generator(nn.Module):
+    def __init__(
+        self,
+        size,
+        style_dim,
+        n_mlp,
+        channel_multiplier=2,
+        blur_kernel=[1, 3, 3, 1],
+        lr_mlp=0.01,
+    ):
+        super().__init__()
+</code></pre>
+<h3 id="mapping-network初始化">mapping network初始化</h3>
+<p>这部分也就是将原始输入随机数z，通过f(z) 变到w空间，是一个由若干个mlp(8个)构成的层。<br>
+第一个是一个用于像素归一化的层，通过input和自身平方根倒数相乘得到归一化数值<br>
+然后接下来的8层都是MLP层，通过线性/非线性映射，将输入的维度从[b,in_dim] 映射到 [b, in_dim]。以下是代码及便于理解的注释。</p>
+<pre><code class="language-python">        &quot;&quot;&quot;
+        归一化： x * rsqrt(x*x.mean+1e-8)
+        &quot;&quot;&quot;
+        layers = [PixelNorm()]
+
+        
+        &quot;&quot;&quot;
+        映射层： 512 -&gt; 512 ,
+        lr_mlp 是学习率乘法因子，
+
+        权重初始化torch.randn(out_dim, in_dim).div_(lr_mul)，除以小于1的数，放大了
+        偏置初始化0，
+
+        权重乘以这个 self.scale = (1 / math.sqrt(in_dim)) * lr_mul ， 实际上两者结合就是*(1 / math.sqrt(in_dim))
+        偏置乘以这个 self.lr_mul 
+        &quot;&quot;&quot;
+        for i in range(n_mlp):
+            layers.append(
+                EqualLinear(
+                    style_dim, style_dim, lr_mul=lr_mlp, activation=&quot;fused_lrelu&quot;
+                )
+            )
+
+        &quot;&quot;&quot;
+        style 将输入b in_dim -&gt; b in_dim 线性或非线性映射(存在激活函数)，dim一般=512
+        
+        &quot;&quot;&quot;
+        self.style = nn.Sequential(*layers)
+</code></pre>
+<h3 id="synthesis-network初始化">Synthesis network初始化</h3>
+<p>主要的生成网络的初始化，包括一些尺寸和通道数的初始化定义，初始输入，卷积，噪声引入的引入。<br>
+尺寸和通道数初始化定义如下，通过字典的方式强行绑定特征图尺寸和通道数。</p>
+<pre><code class="language-python">        self.channels = {
+            4: 512,
+            8: 512,
+            16: 512,
+            32: 512,
+            64: 256 * channel_multiplier,
+            128: 128 * channel_multiplier,
+            256: 64 * channel_multiplier,
+            512: 32 * channel_multiplier,
+            1024: 16 * channel_multiplier,
+        }
+</code></pre>
+<p>初始化输入，设计第一个styleconv和第一个to_rgb层，这些卷积都可以先当作普通卷积来理解。</p>
+<pre><code class="language-python">        &quot;&quot;&quot; 
+        初始化输入
+        self.channels[4]=512,初始化得到(1,512,4,4)
+        第一维度 repeat batch次 变成(b,512,4,4) 
+        &quot;&quot;&quot;
+        self.input = ConstantInput(self.channels[4])
+
+
+        &quot;&quot;&quot;
+        开始设置卷积了，在外部当作普通卷积理解，具体理解可见具体函数
+        输入输出通道都是512，没有上采样
+        &quot;&quot;&quot;
+        self.conv1 = StyledConv(
+            self.channels[4], self.channels[4], 3, style_dim, blur_kernel=blur_kernel
+        )
+
+        &quot;&quot;&quot;
+        先当作普通卷积，从512通道卷积到3通道(RGB)
+        b,512,4,4 -&gt; b,3,4,4
+        &quot;&quot;&quot;
+        self.to_rgb1 = ToRGB(self.channels[4], style_dim, upsample=False)
+</code></pre>
+<p>设计多个尺度下的卷积层和噪声层，具体理解可见代码注释</p>
+<pre><code class="language-python"># 2^n 次方，如果是512，logsize就是9
+        self.log_size = int(math.log(size, 2))
+
+        &quot;&quot;&quot;
+        层数根据logsize来设置如果是512，那么就是(9-2)*2+1 = 15 层，
+        初始尺寸4，是2^2 ，最终尺寸是2^9，除去第一个尺寸的一个卷积，其他每个尺寸都有两个卷积=(9-2)*2+1
+        &quot;&quot;&quot;
+        self.num_layers = (self.log_size - 2) * 2 + 1
+
+        self.convs = nn.ModuleList()
+        self.upsamples = nn.ModuleList()
+        self.to_rgbs = nn.ModuleList()
+        self.noises = nn.Module()
+
+        in_channel = self.channels[4]
+
+
+        &quot;&quot;&quot;
+        为啥+5？ 与每个尺寸的操作对应，第一个卷积只有一个，噪声也只有一个，都是在尺寸4上进行
+        从第二个卷积开始，每个卷积都有两个，噪声也有两个，+5可以保证下一个偶数噪声和下下个奇数噪声尺寸相同。
+        &quot;&quot;&quot;
+        for layer_idx in range(self.num_layers):
+            res = (layer_idx + 5) // 2
+            shape = [1, 1, 2 ** res, 2 ** res]
+            self.noises.register_buffer(f&quot;noise_{layer_idx}&quot;, torch.randn(*shape))
+
+        
+        &quot;&quot;&quot;
+        range从3开始到logsize+1，这个主要还是要和out_channel一一对应
+        第一个卷积输入时self.channels[2 ** 2] = self.channels[4] 
+        接下来每一层都是一个卷积(upsample=True) + 一个卷积(upsample=False)
+        且每次上采样都是伴随 2 ** i的改变，也就是通道数会和设定一样，越来越少
+        &quot;&quot;&quot;
+        for i in range(3, self.log_size + 1):
+            out_channel = self.channels[2 ** i]
+
+            self.convs.append(
+                StyledConv(
+                    in_channel,
+                    out_channel,
+                    3,
+                    style_dim,
+                    upsample=True,
+                    blur_kernel=blur_kernel,
+                )
+            )
+
+            self.convs.append(
+                StyledConv(
+                    out_channel, out_channel, 3, style_dim, blur_kernel=blur_kernel
+                )
+            )
+
+            self.to_rgbs.append(ToRGB(out_channel, style_dim))
+
+            in_channel = out_channel
+
+        &quot;&quot;&quot;
+        self.n_latent 表示lantent 隐码有几个，是2x9-2=16个
+        也就是总的2^9 ，每个维度有两个lantent但是2，没有，所以-2
+        &quot;&quot;&quot;
+        self.n_latent = self.log_size * 2 - 2
+</code></pre>
+<h2 id="12-forward">1.2 forward</h2>
+<p>具体的数据传输流程和生成过程。<br>
+首先可以先把一些训练过程中没用到的模块折叠，方便整体理解。<br>
+1、将输入数据通过mapping network 映射到w空间<br>
+2、将w空间负责n次变成W空间(方便嵌入不同维度)<br>
+3、最小维度(4x4)的卷积和torgb处理<br>
+4、从最小维度到512尺度的卷积(两个，一个有上采样一个没有)和torgb层<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722754274572.png#pic_center" alt="" loading="lazy"></p>
+<h2 id="13-备注styleconv的理解">1.3 备注：styleconv的理解</h2>
+<p>其实跟论文过程描述十分接近，可看下图。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722754600926.png#pic_center" alt="" loading="lazy"><br>
+那具体是怎么调制卷积权重的呢？<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722754928046.png#pic_center" alt="" loading="lazy"></p>
+<h1 id="2-主网络训练">2、主网络训练</h1>
+<h2 id="21-更新鉴别器">2.1 更新鉴别器</h2>
+<p>包括鉴别器更新、鉴别器正则化(16次迭代进行一次)。<br>
+鉴别器损失函数是softplus loss<br>
+正则化函数是 r1_loss （计算真实图像和生成图像的梯度，惩罚这个梯度，目的就是让鉴别器梯度小一点，稳定一点）<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722755231992.png#pic_center" alt="鉴别器更新" loading="lazy"></p>
+<h2 id="22-更新生成器">2.2 更新生成器</h2>
+<p>包括生成器更新、生成器正则化(4次迭代进行一次)<br>
+生成器损失函数也是softplus loss<br>
+正则化函数是路径正则化，也就是对图像增加噪声，观察其w梯度的变化。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722755531783.png#pic_center" alt="生成器更新" loading="lazy"></p>
+<p>路径正则化<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722755795920.png#pic_center" alt="路径正则化" loading="lazy"></p>
+<h1 id="3-图像投影到隐码空间的训练">3、图像投影到隐码空间的训练</h1>
+<h2 id="31-初始设置">3.1 初始设置</h2>
+<p>跟论文描述一样，先计算latent的均值和方差，然后初始化latent和noise的起点<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722756352517.png#pic_center" alt="" loading="lazy"></p>
+<h2 id="32-迭代过程">3.2 迭代过程</h2>
+<p>包括学习率的更新，前面750次迭代的噪声增加，图像损失函数和正则化损失<br>
+学习率和噪声的更新。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722756766026.png#pic_center" alt="" loading="lazy"><br>
+图像损失和正则化损失以及最后的noise归一化。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722756884845.png#pic_center" alt="" loading="lazy"></p>
+<h1 id="带注释代码路径">带注释代码路径</h1>
+<p><code>https://github.com/yeruiqian/stylegan2-pytorch</code></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[论文精读] StyleGAN2 论文&代码理解 (上)]]></title>
+        <id>https://yeruiqian.github.io/post/lun-wen-jing-du-stylegan2-lun-wen-anddai-ma-li-jie/</id>
+        <link href="https://yeruiqian.github.io/post/lun-wen-jing-du-stylegan2-lun-wen-anddai-ma-li-jie/">
+        </link>
+        <updated>2024-08-03T03:49:20.000Z</updated>
+        <content type="html"><![CDATA[<p><ul class="markdownIt-TOC">
+<li><a href="#%E4%B8%80-%E5%89%8D%E8%A8%80">一、前言</a></li>
+<li><a href="#%E4%BA%8C-%E7%AE%80%E8%A6%81%E4%BB%8B%E7%BB%8D">二、简要介绍</a></li>
+<li><a href="#%E4%B8%89-%E8%AF%A6%E7%BB%86%E8%A7%A3%E6%9E%90">三、详细解析</a>
+<ul>
+<li><a href="#1-%E5%BD%92%E4%B8%80%E5%8C%96%E7%9A%84%E4%BF%AE%E6%94%B9">1、归一化的修改</a>
+<ul>
+<li><a href="#11%E7%94%9F%E6%88%90%E5%99%A8%E7%BB%93%E6%9E%84%E7%9A%84%E4%BF%AE%E6%94%B9">1.1生成器结构的修改</a></li>
+<li><a href="#12%E9%87%8D%E6%96%B0%E5%AE%A1%E8%A7%86%E5%AE%9E%E4%BE%8B%E5%BD%92%E4%B8%80%E5%8C%96instance-normalization">1.2重新审视实例归一化(Instance normalization)</a></li>
+</ul>
+</li>
+<li><a href="#2-%E5%9B%BE%E5%83%8F%E8%B4%A8%E9%87%8F%E5%92%8C%E7%94%9F%E6%88%90%E5%99%A8%E5%B9%B3%E6%BB%91ppl%E7%9B%B8%E5%85%B3%E5%86%85%E5%AE%B9">2、图像质量和生成器平滑(PPL相关内容)</a></li>
+<li><a href="#3-%E5%85%B3%E4%BA%8E%E6%B8%90%E8%BF%9B%E5%BC%8F%E5%A2%9E%E9%95%BFprogressive-growing">3、关于渐进式增长Progressive growing</a>
+<ul>
+<li><a href="#31%E9%87%87%E7%94%A8%E6%9B%BF%E6%8D%A2%E7%BB%93%E6%9E%84alternative-network">3.1采用替换结构(Alternative network)</a></li>
+<li><a href="#32%E4%B8%8D%E5%90%8C%E5%88%86%E8%BE%A8%E7%8E%87%E7%9A%84%E4%BD%BF%E7%94%A8">3.2不同分辨率的使用</a></li>
+</ul>
+</li>
+<li><a href="#4-%E5%9B%BE%E5%83%8F%E6%8A%95%E5%BD%B1%E5%88%B0%E9%9A%90%E7%A0%81%E7%A9%BA%E9%97%B4latent-space">4、图像投影到隐码空间(latent space)</a>
+<ul>
+<li><a href="#41%E6%80%8E%E4%B9%88%E6%8A%95%E5%BD%B1">4.1怎么投影？</a></li>
+<li><a href="#42%E7%94%9F%E6%88%90%E5%9B%BE%E5%83%8F%E7%9A%84%E5%B1%9E%E6%80%A7">4.2生成图像的属性</a></li>
+</ul>
+</li>
+<li><a href="#%E6%9C%AA%E6%9D%A5%E5%B1%95%E6%9C%9B">未来展望</a></li>
+</ul>
+</li>
+</ul>
+</p>
+<h1 id="一-前言">一、前言</h1>
+<p>距离阅读这篇论文也过去几天了，有些当初的想法也有所丢失。还是得记录一下理解过程，避免这么快速的忘记。精读这篇文章的原因还是来自于一些工作中的启发，人脸修复算法(face restoration)效果较好的基于可以分为3个流派，一种基于stylegan先验的GFPGAN、GPEN等，另外两种分别是基于transform和diffusion。而基于stylegan的方式通常都是采用 stylegan2。所以有必要熟悉一下stylegan2。stylegan2 只阅读论文或只阅读代码感觉整体的理解都会比较苦涩，结合两者感觉才可以理解的比较好一些。</p>
+<h1 id="二-简要介绍">二、简要介绍</h1>
+<p>stylegan2 相较于 stylegan 主要改进了几个地方，根据文中作者的用语，一个很常见的词就是 <code>revisited</code> ,重新审视了一代的一些结构、损失函数、正则化、训练方式等方面，并提出改进。根据文中的章节和描述，主要分为四大块，<br>
+<strong>(1)、水滴状伪影的修正(归一化的修改)，作者详细的说明一代中使用AdaIN 的缺点，然后分析更好的结构，并直接把归一化操作融合进卷积权重内，变成卷积权重归一化，十分巧妙。</strong><br>
+<strong>(2)、图像质量的的提升，其实是主要提出PPL(perceptual path length)这个东西，并利用这个东西做正则化。</strong><br>
+<strong>(3)、关于渐进提升分辨率的做法，分析不同分辨率下用什么结构融合会比较好(skip or residual)，不同分辨率的特征有没有充分使用上？</strong><br>
+<strong>(4)、关于将图像投影到隐码 (latent space)，怎么投影？利用这个特征，图像-&gt;latent-&gt;图像 来鉴别是自然图像还是模型生成的图像</strong></p>
+<h1 id="三-详细解析">三、详细解析</h1>
+<h2 id="1-归一化的修改">1、归一化的修改</h2>
+<p>水滴状问题如下图所示：<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722673864957.png" alt="" loading="lazy"><br>
+作者将stylegan的水滴状伪影定位到其中的AdaIN归一化模块，为什么这么说？作者认为分别归一化每个特征图的均值和方差，这样子每个特征和相邻特征之间的相对大小关系就被破坏了。AdaIN可以通过让生成器制造尖峰spike来主导整体分布，从而让其他位置的信号变小，逃过鉴别器的鉴别。尖峰就形成了水滴状，一种相较于其他位置很高的信号强度。</p>
+<h3 id="11生成器结构的修改">1.1生成器结构的修改</h3>
+<p>作者重新审视了一下生成器的结构，做出如下图的分离与简化。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722675366892.png" alt="" loading="lazy"><br>
+图a 为原始的StyleGAN结构，图b是分离出归一化层和style block的结构，至于为啥一个AdaIN可以分解成两个mean/std层，这需要涉及到图像风格转移方面的知识。AdaIN 可以看作是两个分布的叠加，<br>
+Adaptive Instance Normalization (AdaIN) 的公式如下：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><mtext>AdaIN</mtext><mo>(</mo><mi>x</mi><mo separator="true">,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mi>σ</mi><mo>(</mo><mi>y</mi><mo>)</mo><mrow><mo fence="true">(</mo><mfrac><mrow><mi>x</mi><mo>−</mo><mi>μ</mi><mo>(</mo><mi>x</mi><mo>)</mo></mrow><mrow><mi>σ</mi><mo>(</mo><mi>x</mi><mo>)</mo></mrow></mfrac><mo fence="true">)</mo></mrow><mo>+</mo><mi>μ</mi><mo>(</mo><mi>y</mi><mo>)</mo></mrow><annotation encoding="application/x-tex">\text{AdaIN}(x, y) = \sigma(y) \left( \frac{x - \mu(x)}{\sigma(x)} \right) + \mu(y) 
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">AdaIN</span></span><span class="mopen">(</span><span class="mord mathdefault">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathdefault" style="margin-right:0.03588em;">y</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.40003em;vertical-align:-0.95003em;"></span><span class="mord mathdefault" style="margin-right:0.03588em;">σ</span><span class="mopen">(</span><span class="mord mathdefault" style="margin-right:0.03588em;">y</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.03588em;">σ</span><span class="mopen">(</span><span class="mord mathdefault">x</span><span class="mclose">)</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathdefault">x</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord mathdefault">μ</span><span class="mopen">(</span><span class="mord mathdefault">x</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.936em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault">μ</span><span class="mopen">(</span><span class="mord mathdefault" style="margin-right:0.03588em;">y</span><span class="mclose">)</span></span></span></span></span></p>
+<p>其中：</p>
+<ul>
+<li>( x ) 是内容图像的特征映射。</li>
+<li>( y ) 是风格图像的特征映射。</li>
+<li>( \mu(x) ) 和 ( \sigma(x) ) 分别是内容图像特征映射的均值和标准差。</li>
+<li>( \mu(y) ) 和 ( \sigma(y) ) 分别是风格图像特征映射的均值和标准差。</li>
+</ul>
+<p>在图b中，下面的Mod就是style嵌入过程，上面的归一化Norm就是内容的归一化x。原始 StyleGAN 在Style Block中应用偏差和噪声，导致它们的相对影响与当前在Style的大小成反比。这个可以理解Style和(偏置和噪声)同样作用于整个block，这个作用大另外一个就作用小了。作者觉得这样不太好，通过将偏置和噪声挪到Block之外，也就是针对归一化后的数据再增加偏置和噪声，可以获得更容易观测的结果。然后发现通过这个变化之后，发现仅仅对标准差Std进行归一化(Norm)和调制(Mod)就够了，不需要均值了，这个变化可以通过图c看到。这是一切重新设计的起点。</p>
+<h3 id="12重新审视实例归一化instance-normalization">1.2重新审视实例归一化(Instance normalization)</h3>
+<p>StyleGAN 的主要优点之一是能够通过风格混合来控制生成的图像，即在推理时将不同的latent w 馈送到不同的层。这种方式可能会放大某些特征图的特征，因此这就是后面归一化操作Norm的存在意义，抵消这种放大，这样后续层可以继续控制图像的生成方向。因此去掉归一化操作的话虽然可以解决水滴伪影问题，却会失去一些尺度的控制。<br>
+因此，作者提出一种替代的归一化方案，这种方案可以两者兼顾(既要还要)，同时解决水滴伪影问题并能够保持整体特征可控制。主要的思想是对要传入的特征图的数据进行归一化，但并不是强制的归一化！<br>
+我们看下图2c，每一个Style Block包含3个东西，调制(Mod)、卷积、归一化(Norm)，调制的话就是将一些特征图的作用放大，作者想到，哎这是可以通过直接修改卷积权重做到吗？weight x scale = feature map x scale，于是，前面两个操作可以用一个卷积替换！<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722677250688.png" alt="" loading="lazy"><br>
+到这里或许会想，那后面那个归一化(Norm) 能不能也简化掉？<br>
+当然可以！后面的归一化操作就是为了抵消放大倍数s的影响，那只要计算他把方差放大了s，我们再用乘以 (1/s) 不就可以了？<br>
+以输入单位标准差为例，经过Mod，标准差变成(式子2)，这是一个L2范数的结果，因此，解调(demod)也就是后续的Norm操作需要将标准差重新变成单位标准差，也就是需要除以sigma，那么这个操作又可以直接用卷积权重来实现(式子3)。因此整体调整后的结构就是图2d。这个调制方式并不是直接使用特征图，而是基于统计数据。<br>
+(ps：为了使实现更高效，作者使用了分组卷积，为了让式子3成立，作用为激活函数进行了缩放，这些都在代码中体现)</p>
+<div align="center">
+    <img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722677774029.png" alt="图片2" width="400">
+    <img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722677791203.png" alt="图片1" width="400">
+</div>
+<h2 id="2-图像质量和生成器平滑ppl相关内容">2、图像质量和生成器平滑(PPL相关内容)</h2>
+<p>文章指出虽然FID和P&amp;R指标在一定程度上可以作为生成器的指标，但是有些场景却不能够覆盖，并举了图13的例子，相同参数但是质量却差别很大。作者观察到感知图像质量和感知路径长度 (PPL) 之间的相关性，通过测量在隐码空间(latent space)发生小扰动情况下，生成图像之间的平均 LPIPS 距离，来量化从隐码空间到输出图像的映射平滑度。也就是给latent space添加点噪声，看生成图像之间的差距。小的PPL距离代表着较高的图像质量。作者通过图4举了个例子，通过在latent space采样，低PPL的图像质量高于高PPL的。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722697259428.png" alt="图4" loading="lazy"><br>
+作者猜想PPL和图像质量的关系，认为在训练的时候由于鉴别器的惩罚作用，生成器最好的选择就是将高质量图像的latent space 拉大(让空间更平滑)，让质量较差图像的latent space变得又急又小，这样鉴别器的损失就可以达到很小。但是作者提出，虽然低PPL代表图像，但并不是要等于0，因为等于0，生成图像就很单一，召回率就等于0了，训练图像不能被完全复现。因此，作者提出了一种基于PPL的正则化器，来制造更加平滑的生成器映射。由于正则化计算是很耗费资源的，因此作者首先提出一种适用于正则化的新优化点。也就是Lazy regularization 懒惰正则化。<br>
+什么是Lazy regularization，顾名思义就是让正则化不那么频繁的更新，这样会减少整体训练的时间，对资源的损耗会降低，论文中提到生成器的主要损失函数是logistics loss 和 正则化项(regularization terms)，但作者通过实验证明，其实正则化项并不需要每次都更新，他每隔16次迭代更新一次就行，并不会影响生成器的结果。详情见表1 c行<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722698058582.png" alt="表1" loading="lazy"><br>
+新的正则化优化技术同样可以用于作者新提出的基于路径长度正则化(path length regularization)。啥是路径长度正则化？ 也就是通过在图像空间引入随机方向（随机噪声），计算latent w的梯度，理想情况下，无论方向怎么变化，w的梯度都要接近相等的长度，这就表明latent spcae和image space映射良好，也就是说，如果w中发生了固定大小a的变化，那么图像也会发生中固定大小b的变化。<br>
+正则化器可以设置为下式。<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722698942479.png" alt="" loading="lazy"><br>
+其中Jw是Jacobian matrix，也即生成器G(w) 和w的偏导数 （也就是图像y和w的偏导数），从式子中看，当偏导数和图像y正交，这个距离是最小的，损失也是最小的。由于考虑到Jacobian matrix矩阵的计算成本，作者直接用梯度*y代替，a也随着时间变化，是一个移动均值的结果，如下图所述。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722699433427.png" alt="替代正则化" loading="lazy"><br>
+从图5中可以看到，采用这种正则化技术可以让PPL变得更加紧凑(右侧)，整体分布都比较小(代表高质量)，但又不是0（召回率为0）<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722699503644.png" alt="" loading="lazy"></p>
+<h2 id="3-关于渐进式增长progressive-growing">3、关于渐进式增长Progressive growing</h2>
+<p>作者指出渐进式增长在生成高分辨率图像方面很成功，但同时也存在问题，有很强的位置偏好。例如图6所示，在转头过程中原来应该一起移动的牙齿却固定不变。<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722699798101.png" alt="图6" loading="lazy"><br>
+作者认为问题在于在渐进式增长中，每个分辨率暂时用作输出分辨率，迫使它生成最高频细节，这导致经过训练的网络在中间层具有过高的频率，从而出现移位不变性。作者想要在去掉缺点的前提下，保留渐进式增长的好处。主要做了两个事情。(1)采用其他结构，skip or residual network。(2) 观察不同分辨率对图像的贡献。</p>
+<h3 id="31采用替换结构alternative-network">3.1采用替换结构(Alternative network)</h3>
+<p>通过简化MSG-GAN的不同分辨率的连接方式，来找到更好的结构，并通过实验结果确定了生成器应该用跳跃(skip)结构，鉴别器应该用残差结构(residual net)。具体结构和结果见下图。</p>
+<div align="center">
+    <img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722736979572.png" alt="图片2" width="400">
+    <img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722736997376.png" alt="图片1" width="400">
+</div>
+<h3 id="32不同分辨率的使用">3.2不同分辨率的使用</h3>
+<p>采用上图7这种结构，并不是强制性的将低分辨率的图像特征转移到高分辨率图像，而是由网络自己优化确定方向，因此作者想要通过数据量化的方式来找到生成器在训练过程中依赖于特定分辨率的程度。具体怎么做呢？作者考虑到由于跳过生成器(图7b)通过显式地对来自多个分辨率的RGB值求和来生成图像，就可以通过测量它们对最终图像的贡献程度来估计相应层的相对重要性。在图 8a 中，作者将每个 tRGB 层产生的像素值的标准差绘制为训练时间的函数。总的计算 w 的 1024 个随机样本的标准偏差，然后并对值进行归一化，使它们总和为 100%。如图8a所示。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722737387563.png" alt="分辨率贡献" loading="lazy"><br>
+然后作者就发现，哎不对劲，怎么训练到最后，1024这个尺度的贡献还没512尺度的大？然后看了一下实际生成图像，发现1024的图像确实并没有这个尺度应该有的细节，反而像是512这种尺度加上一点锐化的图像。<br>
+作者考虑到，会不会是网络不够大的原因，限制了1024的尺度贡献呢？因此作者将最大尺度的特征图数量扩大两倍，重新训练，发现确实结果正常了许多，如图8b所示，1024的贡献变大了，然后计算了一下指标，确实提升了，表1F配置所示</p>
+<h2 id="4-图像投影到隐码空间latent-space">4、图像投影到隐码空间(latent space)</h2>
+<h3 id="41怎么投影">4.1怎么投影？</h3>
+<p>反转生成网络 g 是一个具有许多应用的有趣问题，即通过隐空间中操纵图像，但这首先需要找到图像中原本的隐码 w。这个具体是怎么做的呢？给定一个图像，我们的目的是找到这个图像对应的隐码W以及噪声N。作者是怎么做的呢？<br>
+首先给定随机10000组的latent code z ， 并通过映射网络(mapping network)映射到w空间，然后计算这10000组w的平均值<span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>μ</mi><mo>(</mo><mi>w</mi><mo>)</mo></mrow><annotation encoding="application/x-tex">\mu(w)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault">μ</span><span class="mopen">(</span><span class="mord mathdefault" style="margin-right:0.02691em;">w</span><span class="mclose">)</span></span></span></span>，并通过标准差来计算每一组w到中心<span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>μ</mi></mrow><annotation encoding="application/x-tex">\mu</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord mathdefault">μ</span></span></span></span>的距离。如下列表述一样<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722738862686.png" alt="" loading="lazy"><br>
+初始化设置w=<span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>μ</mi><mo>(</mo><mi>w</mi><mo>)</mo></mrow><annotation encoding="application/x-tex">\mu(w)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault">μ</span><span class="mopen">(</span><span class="mord mathdefault" style="margin-right:0.02691em;">w</span><span class="mclose">)</span></span></span></span> ，噪声n 是单位噪声N(0,I)，w和n为训练优化的参数，学习率设置：前50次用斜坡函数从0到最大值<span class="katex"><span class="katex-mathml"><math><semantics><mrow><msub><mi>λ</mi><mtext>max</mtext></msub><mo>=</mo><mn>0.1</mn></mrow><annotation encoding="application/x-tex">\lambda_{\text{max}}=0.1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathdefault">λ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">max</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">0</span><span class="mord">.</span><span class="mord">1</span></span></span></span>，然后最后250迭代，用余弦时间表(cosine schedule)下降到0。前面750次迭代在计算损失函数的时候对w添加高斯噪声，强度从1到0，作者说这增加了优化的随机性并稳定全局最优。<br>
+作者提到，由于现在是在优化噪声图和w，需要将信号完全摒除掉，因此在损失函数，除了对图像质量进行监督，还需要对噪声进行正则化。以下是图像质量loss，就是原始图像和在给定w、n下生成图像的LPIPS距离<span class="katex"><span class="katex-mathml"><math><semantics><mrow><msub><mi>L</mi><mtext>image </mtext></msub><mo>=</mo><msub><mi>D</mi><mtext>LPIPS </mtext></msub><mrow><mo fence="true">[</mo><mi>x</mi><mo separator="true">,</mo><mi>g</mi><mrow><mo fence="true">(</mo><mover accent="true"><mi mathvariant="bold">w</mi><mo>~</mo></mover><mo separator="true">,</mo><msub><mi mathvariant="bold-italic">n</mi><mn>0</mn></msub><mo separator="true">,</mo><msub><mi mathvariant="bold-italic">n</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo fence="true">)</mo></mrow><mo fence="true">]</mo></mrow></mrow><annotation encoding="application/x-tex">L_{\text {image }}=D_{\text {LPIPS }}\left[x, g\left(\tilde{\mathbf{w}}, \boldsymbol{n}_0, \boldsymbol{n}_1, \ldots\right)\right]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathdefault">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.317502em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">image </span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.02778em;">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.02778em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">LPIPS </span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">[</span><span class="mord mathdefault">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathdefault" style="margin-right:0.03588em;">g</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6812999999999999em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">w</span></span></span></span><span style="top:-3.36344em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.16666em;">~</span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord"><span class="mord"><span class="mord boldsymbol">n</span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord"><span class="mord"><span class="mord boldsymbol">n</span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner">…</span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mclose delimcenter" style="top:0em;">]</span></span></span></span></span>，下图是噪声正则化的具体操作，多个尺度下偏移x，y一个像素，计算点积，如果噪声是高斯分布(不带任何信号)，那么，这个损失函数就为0。注：作者说下采样每个步骤都乘以2来保持单位方差，但是在代码中好像没看到。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722741636073.png" alt="" loading="lazy"><br>
+图18就是存在噪声正则化的效果，噪声图不带有信号分量。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722741770402.png" alt="图18" loading="lazy"></p>
+<h3 id="42生成图像的属性">4.2生成图像的属性</h3>
+<p>对应文中5.1章节，这个章节的目的就是提出另外一种鉴别生成图像和自然图像的方式，那就是将图像投影到隐码空间w，如果能够投影回去，那么他就是假图像(生成图像)。那么怎么看投影是不是准确呢？就是计算原来图像和重新合成图像是LPIPS距离。<span class="katex"><span class="katex-mathml"><math><semantics><mrow><msub><mi>D</mi><mtext>LPIPS </mtext></msub><mrow><mo fence="true">[</mo><mi>x</mi><mo separator="true">,</mo><mi>g</mi><mrow><mo fence="true">(</mo><msup><mover accent="true"><mi>g</mi><mo>~</mo></mover><mrow><mo>−</mo><mn>1</mn></mrow></msup><mo>(</mo><mi>x</mi><mo>)</mo><mo fence="true">)</mo></mrow><mo fence="true">]</mo></mrow></mrow><annotation encoding="application/x-tex">D_{\text {LPIPS }}\left[x, g\left(\tilde{g}^{-1}(x)\right)\right]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.20001em;vertical-align:-0.35001em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.02778em;">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.02778em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">LPIPS </span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">[</span></span><span class="mord mathdefault">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathdefault" style="margin-right:0.03588em;">g</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6678599999999999em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.03588em;">g</span></span></span><span style="top:-3.35em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.22222em;">~</span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.19444em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathdefault">x</span><span class="mclose">)</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">]</span></span></span></span></span></span> 。从图10可以看到，使用StyleGAN2生成的图像可以投影到W中，并反生成十分接近的图像，就可以确定这是生成的假图像，真实图像是没有办法投影到非常接近的地步的，重新生成的图像和原图也有较大的差异。stylegan 第一代使用这种方法没办法做到，区分不开。这种方式作者说是<code>attribute a generated image to its source</code> 归源法？<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/paper/QQ_1722742224171.png" alt="图10" loading="lazy"></p>
+<h2 id="未来展望">未来展望</h2>
+<p>作者的未来展望：<br>
+1、研究路径长度正则化的进一步改进，例如，通过用数据驱动的特征空间指标来替换像素空间 L2 距离。<br>
+2、考虑到 GAN 的实际部署，作者认为找到减少训练数据需求的新方法将很重要。因为获取大量数据在很多应用是比较难的。</p>
+<p>具体代码理解放到下一篇了。。</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[原理] 可变性卷积(deformable convolution)原理及代码解释]]></title>
+        <id>https://yeruiqian.github.io/post/yuan-li-ke-bian-xing-juan-ji-deformable-convolutionyuan-li-ji-dai-ma-jie-shi/</id>
+        <link href="https://yeruiqian.github.io/post/yuan-li-ke-bian-xing-juan-ji-deformable-convolutionyuan-li-ji-dai-ma-jie-shi/">
+        </link>
+        <updated>2024-07-28T08:42:51.000Z</updated>
+        <content type="html"><![CDATA[<p><ul class="markdownIt-TOC">
+<li><a href="#%E5%89%8D%E8%A8%80">前言</a></li>
+<li><a href="#%E6%8F%90%E5%87%BA%E9%97%AE%E9%A2%98">提出问题</a></li>
+<li><a href="#%E6%A0%B8%E5%BF%83%E6%80%9D%E6%83%B3">核心思想</a></li>
+<li><a href="#%E4%BB%A3%E7%A0%81%E7%90%86%E8%A7%A3">代码理解</a>
+<ul>
+<li><a href="#%E6%A8%A1%E5%9D%97%E5%88%9D%E5%A7%8B%E5%8C%96">模块初始化</a></li>
+<li><a href="#forward%E8%BF%87%E7%A8%8B">forward过程</a>
+<ul>
+<li><a href="#selfp_conv">self.p_conv</a></li>
+<li><a href="#self_get_p">self._get_p</a></li>
+<li><a href="#self_get_x_q">self._get_x_q</a></li>
+<li><a href="#self_reshape_x_offset">self._reshape_x_offset</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%82%E8%80%83%E6%96%87%E7%8C%AE">参考文献</a></li>
+</ul>
+</li>
+</ul>
+</p>
+<h1 id="前言">前言</h1>
+<p>代码见：https://github.com/4uiiurz1/pytorch-deform-conv-v2/blob/master/deform_conv_v2.py<br>
+论文：https://arxiv.org/abs/1703.06211</p>
+<h1 id="提出问题">提出问题</h1>
+<p>为什么需要可变形卷积，他和普通卷积有什么差异，有什么优势？</p>
+<h1 id="核心思想">核心思想</h1>
+<p>原始图像通过卷积操作可以变成多通道的特征图，通过特征提取和分析可以完成不同的任务，传统卷积的基本流程如下图，卷积核在原特征图上遍历，加权平均后得到输出特征图相应位置的输出。如公式所示，如果是传统卷积，针对输出图的每个位置，原图上的采样位置是固定的，以3x3卷积核为例，相对采样位置就是公式中的R。</p>
+<div align="center">
+    <img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/tools/QQ_1722655057051.png" alt="图片2" width="400">
+    <img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/tools/QQ_1722655098818.png" alt="图片1" width="400">
+</div>
+<center>传统卷积</center>
+<p>作者认为这种采样方式太规则了，不利于一些不规则特征的提取。例如下图所示，规则卷积vs 可变形卷积提取到的特征有较大区别。针对这个情况，作者提出可变形卷积，也就是说，采样的位置发生了一些变化，可以增加学习采样偏移量，如公式所示。xp代表着新的位置的值，通过bilinear插值得到。</p>
+<div align="center">
+    <img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/tools/QQ_1722655131084.png" alt="图片2" width="500">
+    <img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/tools/QQ_1722655172794.png" alt="图片1" width="400">
+</div>
+<center>可变形卷积</center>
+经过可变形卷积，整体的特征图尺寸不会发生变化，跟普通卷积一样，如下图所示。
+<figure data-type="image" tabindex="1"><img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/tools/QQ_1722655190017.png#pic_center=500x400" alt="在这里插入图片描述" loading="lazy"></figure>
+<h1 id="代码理解">代码理解</h1>
+<p>整个原始代码难以理解的地方就是这个offset的计算，插值的计算，也就是最终用来卷积的这些数是怎么得到的。</p>
+<h2 id="模块初始化">模块初始化</h2>
+<p>模块初始化设置三个卷积，<code>self.conv</code> 用来执行最后的卷积运算，<code>self.p_conv</code> 用来学习偏移量，<code>self.m_conv</code>用来给不同位置增加学习权重，代码及注意点和注释如下所示</p>
+<pre><code class="language-python">class DeformConv2d(nn.Module):
+    def __init__(self, inc, outc, kernel_size=3, padding=1, stride=1, bias=None, modulation=False):
+        &quot;&quot;&quot;
+        Args:
+            modulation (bool, optional): If True, Modulated Defomable Convolution (Deformable ConvNets v2).
+        &quot;&quot;&quot;
+        super(DeformConv2d, self).__init__()
+        self.kernel_size = kernel_size
+        self.padding = padding
+        self.stride = stride
+        self.zero_padding = nn.ZeroPad2d(padding)
+
+        # 最终使用的卷积操作，注意stride=kernel，
+        # 原因是最终采样点不是规则的点，需要结合通过偏移量取值，因此需要构建新的特征图
+        # 新的特征图的尺寸是原来特征图的hw 是原来hw x kernel_size 的大小
+        self.conv = nn.Conv2d(inc, outc, kernel_size=kernel_size, stride=kernel_size, bias=bias)
+
+        # 用来学习偏移量的卷积，其中通道数为2xksxks ，如果k=3，也就是学习9个位置的2方向（x、y）偏移量
+        self.p_conv = nn.Conv2d(inc, 2*kernel_size*kernel_size, kernel_size=3, padding=1, stride=stride)
+        # 初始化偏移卷积为0
+        nn.init.constant_(self.p_conv.weight, 0)
+        # 学习率设置为整个网络0.1倍，避免影响整体网络性能
+        self.p_conv.register_backward_hook(self._set_lr)
+
+        # 为每个位置增加学习权重，初始化和偏移卷积一样
+        self.modulation = modulation
+        if modulation:
+            self.m_conv = nn.Conv2d(inc, kernel_size*kernel_size, kernel_size=3, padding=1, stride=stride)
+            nn.init.constant_(self.m_conv.weight, 0)
+            self.m_conv.register_backward_hook(self._set_lr)
+</code></pre>
+<h2 id="forward过程">forward过程</h2>
+<p>整体主要步骤如下<br>
+1、self.p_conv卷积计算offset ，# 维度 （b,2<em>ks</em>ks,h）,w # 2xksxks 若k=3，也就是用来卷积的9的位置的x、y方向偏移</p>
+<p>2、self._get_p 函数获取offset的位置 （ 绝对位置+相对位置）# 维度 （b, 2N, h, w） ，N=ksxks。</p>
+<p>3、self._get_x_q 之前的函数用来计算双线性插值采样点，因为位置是浮点数，需要映射回具体坐标位置 # (b, c, h, w, N)，不同的通道c其实对应相同的位置。# (b, c, h, w, N)</p>
+<p>4、self._get_x_q 函数用来得到每个位置的插值权重 # (b, c, h, w, N)</p>
+<p>5、self._reshape_x_offset 将b, c, h, w, N重新排布为b, c, hxks, wxks 用来进行最终的卷积<br>
+代码及解释如下。</p>
+<pre><code class="language-python">    def forward(self, x): # b,c,h,w
+        # 计算偏移量，维度 b,2*ks*ks,h,w  # N=kxk
+        offset = self.p_conv(x)
+        if self.modulation: # 为偏移量增加权重
+            m = torch.sigmoid(self.m_conv(x))
+
+        dtype = offset.data.type()
+        ks = self.kernel_size
+        N = offset.size(1) // 2 # N=ks*ks
+
+        # 填充：k=3的卷积，填充p=1，尺度才不会发生改变
+        if self.padding:
+            x = self.zero_padding(x)
+
+        # (b, 2N, h, w) ，得到p的位置
+        p = self._get_p(offset, dtype)
+
+        # (b, h, w, 2N) ，位置放在最后一个维度，方便处理
+        p = p.contiguous().permute(0, 2, 3, 1)
+        q_lt = p.detach().floor() #left top 左上角坐标，也就是最小值，如果是0-1之间就是0
+        q_rb = q_lt + 1 # right bottom右下角坐标，也就是最大值，如果是0-1之间就是1
+
+        # 确定四个角点坐标，设置在0 到 h-1 或 w-1 之间
+        q_lt = torch.cat([torch.clamp(q_lt[..., :N], 0, x.size(2)-1), torch.clamp(q_lt[..., N:], 0, x.size(3)-1)], dim=-1).long()
+        q_rb = torch.cat([torch.clamp(q_rb[..., :N], 0, x.size(2)-1), torch.clamp(q_rb[..., N:], 0, x.size(3)-1)], dim=-1).long()
+        q_lb = torch.cat([q_lt[..., :N], q_rb[..., N:]], dim=-1)
+        q_rt = torch.cat([q_rb[..., :N], q_lt[..., N:]], dim=-1)
+
+        # clip p ，采样点也需要clamp一下
+        p = torch.cat([torch.clamp(p[..., :N], 0, x.size(2)-1), torch.clamp(p[..., N:], 0, x.size(3)-1)], dim=-1)
+
+        # bilinear kernel (b, h, w, N)
+        g_lt = (1 + (q_lt[..., :N].type_as(p) - p[..., :N])) * (1 + (q_lt[..., N:].type_as(p) - p[..., N:]))
+        g_rb = (1 - (q_rb[..., :N].type_as(p) - p[..., :N])) * (1 - (q_rb[..., N:].type_as(p) - p[..., N:]))
+        g_lb = (1 + (q_lb[..., :N].type_as(p) - p[..., :N])) * (1 - (q_lb[..., N:].type_as(p) - p[..., N:]))
+        g_rt = (1 - (q_rt[..., :N].type_as(p) - p[..., :N])) * (1 + (q_rt[..., N:].type_as(p) - p[..., N:]))
+
+        # (b, c, h, w, N)，计算四个领域的权重
+        x_q_lt = self._get_x_q(x, q_lt, N)
+        x_q_rb = self._get_x_q(x, q_rb, N)
+        x_q_lb = self._get_x_q(x, q_lb, N)
+        x_q_rt = self._get_x_q(x, q_rt, N)
+
+        # (b, c, h, w, N)，计算插值结果
+        x_offset = g_lt.unsqueeze(dim=1) * x_q_lt + \
+                   g_rb.unsqueeze(dim=1) * x_q_rb + \
+                   g_lb.unsqueeze(dim=1) * x_q_lb + \
+                   g_rt.unsqueeze(dim=1) * x_q_rt
+
+        # modulation，如果存在这个模块，就让偏移量*m
+        if self.modulation:
+            m = m.contiguous().permute(0, 2, 3, 1)
+            m = m.unsqueeze(dim=1)
+            m = torch.cat([m for _ in range(x_offset.size(1))], dim=1)
+            x_offset *= m
+
+        # 重新排列，变成 h,c,h*ks,w*ks 特征图，用来最后卷积
+        x_offset = self._reshape_x_offset(x_offset, ks)
+        out = self.conv(x_offset)
+
+        return out
+</code></pre>
+<h3 id="selfp_conv">self.p_conv</h3>
+<p>就是普通卷积操作，不进行解释</p>
+<h3 id="self_get_p">self._get_p</h3>
+<p>包括绝对位置和相对位置，绝对位置就是卷积中心在原图中的位置 0-(h-1) ,0-(w-1)  ，相对位置就是0-(ks-1) ，卷积操作中每个点与中心位置的相对关系。</p>
+<pre><code class="language-python">       def _get_p_n(self, N, dtype): # 相对位置
+        p_n_x, p_n_y = torch.meshgrid(
+            torch.arange(-(self.kernel_size-1)//2, (self.kernel_size-1)//2+1),
+            torch.arange(-(self.kernel_size-1)//2, (self.kernel_size-1)//2+1))
+        # (2N, 1)
+        p_n = torch.cat([torch.flatten(p_n_x), torch.flatten(p_n_y)], 0)
+        p_n = p_n.view(1, 2*N, 1, 1).type(dtype)
+
+        return p_n
+
+    def _get_p_0(self, h, w, N, dtype): #绝对位置
+        p_0_x, p_0_y = torch.meshgrid(
+            torch.arange(1, h*self.stride+1, self.stride),
+            torch.arange(1, w*self.stride+1, self.stride))
+        p_0_x = torch.flatten(p_0_x).view(1, 1, h, w).repeat(1, N, 1, 1)
+        p_0_y = torch.flatten(p_0_y).view(1, 1, h, w).repeat(1, N, 1, 1)
+        p_0 = torch.cat([p_0_x, p_0_y], 1).type(dtype)
+
+        return p_0
+
+    def _get_p(self, offset, dtype):
+        N, h, w = offset.size(1)//2, offset.size(2), offset.size(3)
+
+        # (1, 2N, 1, 1)，相对位置只有2N个，因为就是卷积核大小
+        p_n = self._get_p_n(N, dtype)
+        # (1, 2N, h, w)，绝对位置有2NxHxW，因为每个位置都有偏移量
+        p_0 = self._get_p_0(h, w, N, dtype) 
+        p = p_0 + p_n + offset
+        return p
+       
+</code></pre>
+<h3 id="self_get_x_q">self._get_x_q</h3>
+<p>将原始输入的hw变成一个维度的向量，相应的位置索引也需要变成一维，所以需要乘以w，然后最后在重新变成hxw格式</p>
+<pre><code class="language-python">def _get_x_q(self, x, q, N):
+        b, h, w, _ = q.size()
+        padded_w = x.size(3)
+        c = x.size(1)
+        # (b, c, h*w)
+        x = x.contiguous().view(b, c, -1)
+
+        # (b, h, w, N)
+        index = q[..., :N]*padded_w + q[..., N:]  # offset_x*w + offset_y
+        # (b, c, h*w*N)
+        index = index.contiguous().unsqueeze(dim=1).expand(-1, c, -1, -1, -1).contiguous().view(b, c, -1)
+
+        x_offset = x.gather(dim=-1, index=index).contiguous().view(b, c, h, w, N)
+
+        return x_offset
+</code></pre>
+<h3 id="self_reshape_x_offset">self._reshape_x_offset</h3>
+<p>这个的理解可以根据这个博客@<a href="https://zhuanlan.zhihu.com/p/102707081">链接</a>来，也就是将整体数据重新排布成卷积的类型</p>
+<div align="center">
+    <img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/tools/QQ_1722655219787.png" alt="图片2" width="500">
+</div>
+<pre><code class="language-python">    @staticmethod
+    def _reshape_x_offset(x_offset, ks):
+        b, c, h, w, N = x_offset.size()
+        x_offset = torch.cat([x_offset[..., s:s+ks].contiguous().view(b, c, h, w*ks) for s in range(0, N, ks)], dim=-1)
+        x_offset = x_offset.contiguous().view(b, c, h*ks, w*ks)
+
+        return x_offset
+</code></pre>
+<h2 id="参考文献">参考文献</h2>
+<p>https://blog.csdn.net/panghuzhenbang/article/details/129816869<br>
+https://zhuanlan.zhihu.com/p/335147713<br>
+https://zhuanlan.zhihu.com/p/102707081<br>
+https://blog.csdn.net/panghuzhenbang/article/details/129816869</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[工具]GitHub + PicGo 搭建免费博客图床]]></title>
+        <id>https://yeruiqian.github.io/post/gong-ju-github-picgo-da-jian-bo-ke-tu-chuang/</id>
+        <link href="https://yeruiqian.github.io/post/gong-ju-github-picgo-da-jian-bo-ke-tu-chuang/">
+        </link>
+        <updated>2024-07-28T05:39:48.000Z</updated>
+        <content type="html"><![CDATA[<p><ul class="markdownIt-TOC">
+<li><a href="#%E8%B5%B7%E5%9B%A0">起因</a></li>
+<li><a href="#github">GitHub</a>
+<ul>
+<li><a href="#%E6%96%B0%E5%BB%BAgithub%E4%BB%93%E5%BA%93">新建GitHub仓库</a></li>
+<li><a href="#%E6%96%B0%E5%BB%BAtoken%E6%8E%88%E4%BA%88picgo%E6%9D%83%E9%99%90">新建token授予picgo权限</a></li>
+</ul>
+</li>
+<li><a href="#picgo">PicGO</a>
+<ul>
+<li><a href="#picgo%E4%B8%8A%E4%BC%A0%E5%A4%B1%E8%B4%A5%E5%8E%9F%E5%9B%A0">PicGO上传失败原因</a></li>
+</ul>
+</li>
+</ul>
+</p>
+<h1 id="起因">起因</h1>
+<p>还是觉得个人博客记录最好还是不要money😥，所以还是想白嫖，找到了GitHub + PicGO的方式，记录一下。</p>
+<h1 id="github">GitHub</h1>
+<p>过程和搭建博客@<a href="https://yeruiqian.github.io/post/gong-ju-githubgrideagittalk-da-jian-ge-ren-mian-fei-bo-ke/">链接</a>类似，新建仓库存储图片 + 使用token管理仓库权限，用其他软件操作导入。</p>
+<h2 id="新建github仓库">新建GitHub仓库</h2>
+<p>新建仓库用来存储博客照片<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722147900247.png" alt="new respository" loading="lazy"></p>
+<h2 id="新建token授予picgo权限">新建token授予picgo权限</h2>
+<figure data-type="image" tabindex="1"><img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/tools/QQ_1722148434409.png" alt="token" loading="lazy"></figure>
+<h1 id="picgo">PicGO</h1>
+<p>下载安装picgo@<a href="https://github.com/Molunerfinn/PicGo">下载链接</a> ,和搭建博客一样，在用户界面填写下自己仓库和token信息，并设置为默认图床。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/tools/QQ_1722148573248.png" alt="picgo" loading="lazy"></p>
+<h2 id="picgo上传失败原因">PicGO上传失败原因</h2>
+<p>如果上传失败，可能是自己使用了梯子（你懂的，GitHub一般都要用，不然很慢），需要电脑找下端口和代理，填写相关信息<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/tools/QQ_1722148805989.png" alt="picgo失败注意点" loading="lazy"></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[工具] GitHub+Gridea+GitTalk 搭建个人免费博客]]></title>
+        <id>https://yeruiqian.github.io/post/gong-ju-githubgrideagittalk-da-jian-ge-ren-mian-fei-bo-ke/</id>
+        <link href="https://yeruiqian.github.io/post/gong-ju-githubgrideagittalk-da-jian-ge-ren-mian-fei-bo-ke/">
+        </link>
+        <updated>2024-07-27T15:12:58.000Z</updated>
+        <content type="html"><![CDATA[<p><ul class="markdownIt-TOC">
+<li><a href="#%E8%B5%B7%E5%9B%A0">起因</a></li>
+<li><a href="#github">GitHub</a>
+<ul>
+<li><a href="#%E5%88%9B%E5%BB%BA%E4%B8%AA%E4%BA%BA%E4%BB%93%E5%BA%93%E5%AD%98%E4%B8%BB%E9%A1%B5">创建个人仓库存主页</a></li>
+<li><a href="#%E5%88%9B%E5%BB%BA%E7%94%A8%E4%BA%8Egridea%E8%BF%9E%E6%8E%A5%E7%9A%84token">创建用于Gridea连接的Token</a></li>
+</ul>
+</li>
+<li><a href="#gridea">Gridea</a>
+<ul>
+<li><a href="#%E9%85%8D%E7%BD%AE">配置</a></li>
+</ul>
+</li>
+<li><a href="#gittalk">GitTalk</a></li>
+<li><a href="#%E5%A4%A7%E5%8A%9F%E5%91%8A%E6%88%90">大功告成</a></li>
+</ul>
+</p>
+<h1 id="起因">起因</h1>
+<p>想要搭建自己的博客网站，又不想花钱买域名，也不会前端技术，只能求助于简单(傻逼式)且免费的博客搭建方式。偶然间看到这种方式，就搭建了一下。</p>
+<h1 id="github">GitHub</h1>
+<p>GitHub 可以用来创建 [用户名.github.io] 的个人主页，如果是学者，那这个主页应该是用来介绍自己的各种著作，自己的个人经历。如果是社畜，那可能就是用来创建自己的吐槽记录平台。</p>
+<h2 id="创建个人仓库存主页">创建个人仓库存主页</h2>
+<p>1、新建个人仓库，仓库名设置为[用户名.github.io] ，如下图所示，已经设置过了，所以显示重复。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722094791380.png" alt="new repository" loading="lazy"><br>
+2、在设置(Setting)界面将部署的页面设置为master，如下图所示。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722095110265.png" alt="setting" loading="lazy"></p>
+<h2 id="创建用于gridea连接的token">创建用于Gridea连接的Token</h2>
+<p>在个人Setting界面创建用于Gridea连接的Token，开始repo权限即可，记得保存好Token，关闭页面后就看不见了。 <img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722095258907.png" alt="Token" loading="lazy"></p>
+<h1 id="gridea">Gridea</h1>
+<p>这个分为开源和闭源的，开源的现在基本不更新了(毕竟人家要赚钱)，但是感觉开源的也还行，可以用用看。可以直接下载exe安装，进行傻瓜式配置。下载链接<code>https://open.gridea.dev/#started</code></p>
+<h2 id="配置">配置</h2>
+<p>软件界面远程设置一下，按照下图设置自己的仓库就行。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722095781868.png" alt="配置" loading="lazy"></p>
+<h1 id="gittalk">GitTalk</h1>
+<p>这个用来添加评论功能，跟上面Token类似，生成一个用来授予GitTalk的ID和secret，基础仓库记得加上 https://<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722096717285.png" alt="talk" loading="lazy"><br>
+然后将ID和secret上传到Gridea软件。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722096886839.png" alt="talk" loading="lazy"></p>
+<h1 id="大功告成">大功告成</h1>
+<p>demo <code>https://yeruiqian.github.io/</code></p>
+<p>搭建过程中看到有帮助的博客链接<br>
+@https://blog.csdn.net/qq_38830593/article/details/132686063<br>
+@https://blog.csdn.net/qq_38463737/article/details/120288329<br>
+@https://vlieo.com/post/config-gitalk-in-the-gridea/</p>
+]]></content>
+    </entry>
+</feed>

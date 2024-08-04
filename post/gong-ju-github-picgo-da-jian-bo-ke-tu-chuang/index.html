@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>[工具]GitHub + PicGo 搭建免费博客图床 | RuiqianYe</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://yeruiqian.github.io/favicon.ico?v=1722758233249">
+<link rel="stylesheet" href="https://yeruiqian.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+
+    <meta name="description" content="
+起因
+GitHub
+
+新建GitHub仓库
+新建token授予picgo权限
+
+
+PicGO
+
+PicGO上传失败原因
+
+
+
+
+起因
+还是觉得个人博客记录最好还是不要money😥，所以还是想白嫖，找到了GitHub + PicGO的方式..." />
+    <meta name="keywords" content="工具使用" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://yeruiqian.github.io">
+        <img src="https://yeruiqian.github.io/images/avatar.png?v=1722758233249" class="site-logo">
+        <h1 class="site-title">RuiqianYe</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="site-nav">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+          <a class="social-link" href="https://github.com/yeruiqian" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      温故而知新
+    </div>
+    <div class="site-footer">
+      Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | <a class="rss" href="https://yeruiqian.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">[工具]GitHub + PicGo 搭建免费博客图床</h2>
+            <div class="post-date">2024-07-28</div>
+            
+            <div class="post-content" v-pre>
+              <p><ul class="markdownIt-TOC">
+<li><a href="#%E8%B5%B7%E5%9B%A0">起因</a></li>
+<li><a href="#github">GitHub</a>
+<ul>
+<li><a href="#%E6%96%B0%E5%BB%BAgithub%E4%BB%93%E5%BA%93">新建GitHub仓库</a></li>
+<li><a href="#%E6%96%B0%E5%BB%BAtoken%E6%8E%88%E4%BA%88picgo%E6%9D%83%E9%99%90">新建token授予picgo权限</a></li>
+</ul>
+</li>
+<li><a href="#picgo">PicGO</a>
+<ul>
+<li><a href="#picgo%E4%B8%8A%E4%BC%A0%E5%A4%B1%E8%B4%A5%E5%8E%9F%E5%9B%A0">PicGO上传失败原因</a></li>
+</ul>
+</li>
+</ul>
+</p>
+<h1 id="起因">起因</h1>
+<p>还是觉得个人博客记录最好还是不要money😥，所以还是想白嫖，找到了GitHub + PicGO的方式，记录一下。</p>
+<h1 id="github">GitHub</h1>
+<p>过程和搭建博客@<a href="https://yeruiqian.github.io/post/gong-ju-githubgrideagittalk-da-jian-ge-ren-mian-fei-bo-ke/">链接</a>类似，新建仓库存储图片 + 使用token管理仓库权限，用其他软件操作导入。</p>
+<h2 id="新建github仓库">新建GitHub仓库</h2>
+<p>新建仓库用来存储博客照片<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/testQQ_1722147900247.png" alt="new respository" loading="lazy"></p>
+<h2 id="新建token授予picgo权限">新建token授予picgo权限</h2>
+<figure data-type="image" tabindex="1"><img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/tools/QQ_1722148434409.png" alt="token" loading="lazy"></figure>
+<h1 id="picgo">PicGO</h1>
+<p>下载安装picgo@<a href="https://github.com/Molunerfinn/PicGo">下载链接</a> ,和搭建博客一样，在用户界面填写下自己仓库和token信息，并设置为默认图床。<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/tools/QQ_1722148573248.png" alt="picgo" loading="lazy"></p>
+<h2 id="picgo上传失败原因">PicGO上传失败原因</h2>
+<p>如果上传失败，可能是自己使用了梯子（你懂的，GitHub一般都要用，不然很慢），需要电脑找下端口和代理，填写相关信息<br>
+<img src="https://raw.githubusercontent.com/yeruiqian/blog_img/master/tools/QQ_1722148805989.png" alt="picgo失败注意点" loading="lazy"></p>
+
+            </div>
+            
+              <div class="tag-container">
+                
+                  <a href="https://yeruiqian.github.io/tag/zz5qqFdEe/" class="tag">
+                    工具使用
+                  </a>
+                
+              </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://yeruiqian.github.io/post/gong-ju-githubgrideagittalk-da-jian-ge-ren-mian-fei-bo-ke/">
+                  <h3 class="post-title">
+                    [工具] GitHub+Gridea+GitTalk 搭建个人免费博客
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+              
+                <div id="gitalk-container" data-aos="fade-in"></div>
+              
+
+              
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: 'Ov23liaRWNmhKYXwLF57',
+        clientSecret: 'b5f0905139787275a2ea74626cf44f004c753358',
+        repo: 'yeruiqian.github.io',
+        owner: 'yeruiqian',
+        admin: ['yeruiqian'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>
